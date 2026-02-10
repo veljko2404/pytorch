@@ -1,1 +1,1 @@
-This repository is a practical learning space for PyTorch, focused on understanding how deep learning models work by building, training, and experimenting with them.
+A PyTorch repo with deep learning experiments, including a self-distillation project where a network teaches itself
