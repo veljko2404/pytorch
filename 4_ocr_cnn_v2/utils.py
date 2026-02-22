@@ -26,7 +26,7 @@ def sinusoidal_pos_enc(max_len: int, d_model: int) -> torch.Tensor:
     pe[:, 1::2] = torch.cos(pos * div)
     return pe.unsqueeze(1)  # [max_len, 1, d_model]
 
-class CRNN(nn.Module):
+class CNNTransformerOCR(nn.Module):
     """
     CNN -> sequence (width as time) -> TransformerEncoder -> per-timestep logits for CTC.
     Input expected: [B, 1, 70, 280] (grayscale already, or you can convert before).
