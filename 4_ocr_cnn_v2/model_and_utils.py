@@ -33,79 +33,64 @@ class CNNTransformerOCR(nn.Module):
     Output: [T, B, num_classes]  where num_classes should be len(vocab) + 1 (CTC blank).
     """
 
-    def __init__(
-        self,
-        num_classes: int,
-        img_h: int = 70,
-        img_w: int = 280,
-        d_model: int = 512,
-        nhead: int = 8,
-        num_layers: int = 4,
-        dim_ff: int = 2048,
-        dropout: float = 0.1,
-        use_groupnorm: bool = False,
-    ):
+    def __init__(self, num_classes: int, img_h: int = 70, img_w: int = 280):
         super().__init__()
-
-        def Norm(c: int):
-            return nn.GroupNorm(32, c) if use_groupnorm else nn.BatchNorm2d(c)
 
         self.cnn = nn.Sequential(
             # [B,1,70,280]
-            nn.Conv2d(1, 64, 3, padding=1), Norm(64), nn.ReLU(inplace=True),
+            nn.Conv2d(1, 64, 3, padding=1), nn.BatchNorm2d(64), nn.ReLU(inplace=True),
             nn.MaxPool2d(2, 2),  # -> [B,64,35,140]
 
-            nn.Conv2d(64, 128, 3, padding=1), Norm(128), nn.ReLU(inplace=True),
+            nn.Conv2d(64, 128, 3, padding=1), nn.BatchNorm2d(128), nn.ReLU(inplace=True),
             nn.MaxPool2d((2, 1), (2, 1)),  # -> [B,128,17,140]  (KEEP WIDTH)
 
-            nn.Conv2d(128, 256, 3, padding=1), Norm(256), nn.ReLU(inplace=True),
-            nn.Conv2d(256, 256, 3, padding=1), Norm(256), nn.ReLU(inplace=True),
+            nn.Conv2d(128, 256, 3, padding=1), nn.BatchNorm2d(256), nn.ReLU(inplace=True),
+            nn.Conv2d(256, 256, 3, padding=1), nn.BatchNorm2d(256), nn.ReLU(inplace=True),
             nn.MaxPool2d((2, 1), (2, 1)),  # -> [B,256,8,140]
 
-            nn.Conv2d(256, 512, 3, padding=1), Norm(512), nn.ReLU(inplace=True),
-            nn.Conv2d(512, 512, 3, padding=1), Norm(512), nn.ReLU(inplace=True),
+            nn.Conv2d(256, 512, 3, padding=1), nn.BatchNorm2d(512), nn.ReLU(inplace=True),
+            nn.Conv2d(512, 512, 3, padding=1), nn.BatchNorm2d(512), nn.ReLU(inplace=True),
             nn.MaxPool2d((2, 1), (2, 1)),  # -> [B,512,4,140]
 
             # Collapse height 4 -> 1, keep width (time) = 140
-            nn.Conv2d(512, d_model, kernel_size=(4, 1), padding=0),
-            Norm(d_model),
+            nn.Conv2d(512, 512, kernel_size=(4, 1), padding=0),
+            nn.BatchNorm2d(512),
             nn.ReLU(inplace=True),
         )
 
         with torch.no_grad():
             dummy = torch.zeros(1, 1, img_h, img_w)
-            out = self.cnn(dummy)  # [1, d_model, 1, T]
+            out = self.cnn(dummy)  # [1, 512, 1, T]
             self.max_T = out.shape[-1]
 
-        # Positional encoding buffer: [max_T, 1, d_model]
-        self.register_buffer("pos_enc", sinusoidal_pos_enc(self.max_T, d_model), persistent=False)
+        # Positional encoding buffer: [max_T, 1, 512]
+        self.register_buffer("pos_enc", sinusoidal_pos_enc(self.max_T, 512), persistent=False)
 
         # ---- Transformer encoder ----
         enc_layer = nn.TransformerEncoderLayer(
-            d_model=d_model,
-            nhead=nhead,
-            dim_feedforward=dim_ff,
-            dropout=dropout,
+            d_model=512,
+            nhead=8,
+            dim_feedforward=2048,
+            dropout=0.1,
             batch_first=False,
             norm_first=True,         # generally stabilizes training
             activation="gelu",       # often better than ReLU here
         )
-        self.transformer = nn.TransformerEncoder(enc_layer, num_layers=num_layers)
+        self.transformer = nn.TransformerEncoder(enc_layer, num_layers=4)
 
         # ---- Classifier ----
-        self.classifier = nn.Linear(d_model, num_classes)
+        self.classifier = nn.Linear(512, num_classes)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        f = self.cnn(x)              # [B,d_model,1,T]
-        f = f.squeeze(2)             # [B,d_model,T]
-        f = f.permute(2, 0, 1)       # [T,B,d_model]
+        f = self.cnn(x)              # [B,512,1,T]
+        f = f.squeeze(2)             # [B,512,T]
+        f = f.permute(2, 0, 1)       # [T,B,512]
 
         T = f.size(0)
-        f = f + self.pos_enc[:T]     # [T,B,d_model] + [T,1,d_model]
+        f = f + self.pos_enc[:T]     # [T,B,512] + [T,1,512]
 
-        y = self.transformer(f)      # [T,B,d_model]
-        logits = self.classifier(y)  # [T,B,num_classes]
-        return logits
+        y = self.transformer(f)      # [T,B,512]
+        return self.classifier(y)  # [T,B,num_classes]
 
 class OCRDataset(Dataset):
     def __init__(self, img_dir: Path, csv_path: Path):
