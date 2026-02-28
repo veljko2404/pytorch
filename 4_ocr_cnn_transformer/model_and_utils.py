@@ -13,6 +13,7 @@ ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 "
 MIN_LEN = 3
 MAX_LEN = 14
 ALLOWED = set(ALPHABET)
+DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
 def sinusoidal_pos_enc(max_len: int, d_model: int) -> torch.Tensor:
     """
@@ -147,7 +148,44 @@ def normalize_text(s: str) -> str:
     return s
 
 char2idx = {c: i + 1 for i, c in enumerate(ALPHABET)}
+idx2char = {i + 1: c for i, c in enumerate(ALPHABET)}
 
 def encode_text(text: str) -> torch.Tensor:
     text = normalize_text(text)
     return torch.tensor([char2idx[c] for c in text], dtype=torch.long)
+
+def ctc_greedy_decode(logits: torch.Tensor) -> list[str]:
+    pred = logits.argmax(dim=-1)  # [T, B]
+    pred = pred.detach().cpu().numpy()
+
+    out = []
+    for b in range(pred.shape[1]):
+        seq = pred[:, b].tolist()
+        collapsed = []
+        prev = None
+        for p in seq:
+            if p != prev:
+                collapsed.append(p)
+            prev = p
+        collapsed = [p for p in collapsed if p != 0]
+        out.append("".join(idx2char.get(p, "") for p in collapsed))
+    return out
+
+def cer(pred: str, gt: str) -> float:
+    a, b = pred, gt
+    if len(b) == 0:
+        return 0.0 if len(a) == 0 else 1.0
+    dp = list(range(len(b) + 1))
+    for i, ca in enumerate(a, 1):
+        prev = dp[0]
+        dp[0] = i
+        for j, cb in enumerate(b, 1):
+            cur = dp[j]
+            cost = 0 if ca == cb else 1
+            dp[j] = min(
+                dp[j] + 1,      # deletion
+                dp[j-1] + 1,    # insertion
+                prev + cost     # substitution
+            )
+            prev = cur
+    return dp[-1] / max(1, len(b))
