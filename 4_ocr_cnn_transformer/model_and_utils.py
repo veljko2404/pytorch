@@ -32,7 +32,6 @@ class CNNTransformerOCR(nn.Module):
     Input expected: [B, 1, 70, 280] (grayscale already, or you can convert before).
     Output: [T, B, num_classes]  where num_classes should be len(vocab) + 1 (CTC blank).
     """
-
     def __init__(self, num_classes: int, img_h: int = 70, img_w: int = 280):
         super().__init__()
 
@@ -52,7 +51,7 @@ class CNNTransformerOCR(nn.Module):
             nn.Conv2d(512, 512, 3, padding=1), nn.BatchNorm2d(512), nn.ReLU(inplace=True),
             nn.MaxPool2d((2, 1), (2, 1)),  # -> [B,512,4,140]
 
-            # Collapse height 4 -> 1, keep width (time) = 140
+            # Collapse height 4 -> 1, keep width 140
             nn.Conv2d(512, 512, kernel_size=(4, 1), padding=0),
             nn.BatchNorm2d(512),
             nn.ReLU(inplace=True),
@@ -60,7 +59,7 @@ class CNNTransformerOCR(nn.Module):
 
         with torch.no_grad():
             dummy = torch.zeros(1, 1, img_h, img_w)
-            out = self.cnn(dummy)  # [1, 512, 1, T]
+            out = self.cnn(dummy)  # [1, 512, 1, 140]
             self.max_T = out.shape[-1]
 
         # Positional encoding buffer: [max_T, 1, 512]
@@ -82,15 +81,15 @@ class CNNTransformerOCR(nn.Module):
         self.classifier = nn.Linear(512, num_classes)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        f = self.cnn(x)              # [B,512,1,T]
-        f = f.squeeze(2)             # [B,512,T]
-        f = f.permute(2, 0, 1)       # [T,B,512]
+        f = self.cnn(x)              # [B,512,1,140]
+        f = f.squeeze(2)             # [B,512,140]
+        f = f.permute(2, 0, 1)       # [140,B,512]
 
         T = f.size(0)
-        f = f + self.pos_enc[:T]     # [T,B,512] + [T,1,512]
+        f = f + self.pos_enc[:T]     # [140,B,512] + [140,1,512]
 
-        y = self.transformer(f)      # [T,B,512]
-        return self.classifier(y)  # [T,B,num_classes]
+        y = self.transformer(f)      # [140,B,512]
+        return self.classifier(y)  # [140,B,num_classes]
 
 class OCRDataset(Dataset):
     def __init__(self, img_dir: Path, csv_path: Path):
