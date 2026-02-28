@@ -85,7 +85,7 @@ The model is trained end-to-end using the CTC loss function, which aligns predic
 
 Regularization techniques, including normalization layers and dropout, are applied to improve generalization. Due to the computational demands of convolutional and attention-based layers, training is performed using GPU acceleration. All experiments are conducted on Google Colaboratory using an NVIDIA L4 GPU.
 
-Training is performed using the Adam optimizer with a learning rate schedule with a linear warm-up phase followed by cosine decay. Mini-batch gradient descent is used, with batch sizes selected based on available GPU memory. Model performance is monitored on a validation set to detect overfitting, and the best-performing model checkpoint is selected based on the validation loss.
+Training is performed using the AdamW optimizer with a learning rate schedule with a linear warm-up phase followed by cosine decay. Mini-batch gradient descent is used, with batch sizes selected based on available GPU memory. Model performance is monitored on a validation set to detect overfitting, and the best-performing model checkpoint is selected based on the validation loss.
 
 \begin{figure}[h]
     \centering
@@ -102,12 +102,12 @@ Experimental evaluation shows that the proposed model achieves high character-le
 
 \begin{figure}[h]
     \centering
-    \includegraphics[width=0.4\textwidth]{preds.png}
+    \includegraphics[width=0.45\textwidth]{preds.png}
     \caption{Qualitative results}
     \label{fig:qualitative_results}
 \end{figure}
 
-The qualitative examples further illustrate the behavior of the proposed model on individual samples. In the shown cases, the model correctly recognizes complete words such as “Neural network” and “FORMULA 1”, as well as alphanumeric strings including hardware identifiers. Minor errors can be observed in a small number of predictions, primarily related to character spacing or the separation of adjacent characters (missing or misplaced spaces). These errors are consistent with the character-level evaluation metrics and are limited, suggesting that the model maintains reliable performance across different text formats.
+The qualitative examples further illustrate the behavior of the proposed model on individual samples. In the shown cases, the model correctly recognizes complete words such as "BMW 335i 2014", "Petkovic Veljko" and "FORMULA 1", as well as alphanumeric strings including hardware identifiers. Minor errors can be observed in a small number of predictions, primarily related to character spacing or the separation of adjacent characters, as well as occasional character substitutions, such as recognizing "O" instead of "CI" in "NEW YORK CITY". These errors are expected based on character-level evaluation and are not significant, suggesting that the model maintains reliable performance across different text formats.
 
 \section{\textbf{Conclusion}}
 
